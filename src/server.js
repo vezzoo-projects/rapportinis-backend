@@ -1,6 +1,6 @@
-const CONNECTION = require('../configs/connection.env.json')
+const CONNECTION = require('./configs/connection.env.json')
 const { doLogin, addActivity, editActivity, calculateTimes, getRawActivities } = require('./db_interface')
-const { connect } = require('../backend/_database/interface')
+const { connect } = require('./_database/interface')
 const cors = require('cors')
 
 const express = require('express')
