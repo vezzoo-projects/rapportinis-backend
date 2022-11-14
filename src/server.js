@@ -2,10 +2,11 @@ const CONNECTION = require('./configs/connection.env.json')
 const { doLogin, addActivity, editActivity, calculateTimes, getRawActivities } = require('./db_interface')
 const { connect } = require('./_database/interface')
 const cors = require('cors')
-
 const express = require('express')
 const bodyParser = require('body-parser')
 const server = express()
+
+process.env.TZ = 'Europe/Rome'
 
 function log(method, path, status, body) {
     console.log(method + ' ' + path + ', status' + status + ', body' + JSON.stringify(body))
