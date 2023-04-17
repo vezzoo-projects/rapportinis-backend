@@ -12,7 +12,7 @@ const STATES = {
     dayEnd: '--%day-end%--',
 }
 
-const TIMES = ['08:45', '13:00', '14:15', '18:00']
+const TIMES = ['09:00', '13:00', '14:00', '18:00']
 
 async function doLogin(user) {
     if (!user) {
