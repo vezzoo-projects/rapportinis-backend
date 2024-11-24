@@ -9,13 +9,19 @@ async function connect() {
             dialect: 'sqlite',
             storage: DATABASE.storage,
         })
-    } else if (DATABASE.use_url) global.sequelize = new Sequelize(process.env[DATABASE.env_url])
-    else
-        global.sequelize = new Sequelize(DATABASE.db, DATABASE.user, DATABASE.password, {
+    } else if (DATABASE.use_url) {
+        global.sequelize = new Sequelize(process.env[DATABASE.env_url])
+    } else {
+        global.sequelize = new Sequelize({
+            database: DATABASE.db,
+            username: DATABASE.user,
+            password: DATABASE.password,
             host: DATABASE.host,
+            port: DATABASE.port,
             dialect: DATABASE.dialect,
             pool: DATABASE.pool,
         })
+    }
 
     sequelize.tables = {}
     await sequelize.authenticate()
