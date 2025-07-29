@@ -37,3 +37,6 @@ lerna-debug.log*
 # Config files
 /src/configs/*.json
 !/src/configs/*.example.json
+
+# DBs
+*.sqlite
