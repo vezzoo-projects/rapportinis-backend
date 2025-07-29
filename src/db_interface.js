@@ -9,6 +9,7 @@ const TABLES = {
 
 const STATES = {
     break: '--%break%--',
+    launch_break: '--%launch-break%--', // retrocompatibilità
     dayEnd: '--%day-end%--',
 }
 
@@ -70,7 +71,7 @@ async function calculateTimes(user_id, startTimestamp, now) {
             const time = rawActivities[i + 1] ? rawActivities[i + 1].date - a.date : 0
             return { activity, time }
         })
-        .filter((a) => a.activity !== STATES.dayEnd && a.activity !== STATES.break)
+        .filter((a) => a.activity !== STATES.dayEnd && a.activity !== STATES.break && a.activity !== STATES.launch_break)
         .reduce((accumulator, currentValue) => {
             const a = accumulator.find((a) => a.activity === currentValue.activity)
 
@@ -94,7 +95,7 @@ async function calculateTimes(user_id, startTimestamp, now) {
             const curr = sortedActivities[i]
             const next = sortedActivities[i + 1] || { activity: 'Fake', date: now }
 
-            if (curr.activity !== STATES.break && curr.activity !== STATES.dayEnd && curr.date < now) {
+            if (curr.activity !== STATES.break && curr.activity !== STATES.dayEnd && curr.activity !== STATES.launch_break && curr.date < now) {
                 actualTime += next.date - curr.date
             }
 
