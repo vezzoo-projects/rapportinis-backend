@@ -86,32 +86,36 @@ async function calculateTimes(user_id, startTimestamp, now) {
     const total = formatTime(totalSeconds)
     const sortedActivities = rawActivities.sort((a, b) => a.date - b.date)
 
-    let actualTime = 0
-    for (let i = 0; i < sortedActivities.length; i++) {
-        const curr = sortedActivities[i]
-        const next = sortedActivities[i + 1] || { activity: 'Fake', date: now }
+    const currentDay = new Date(startTimestamp).getDay()
+    let delta = undefined
+    if (currentDay !== 0 && currentDay !== 6) {
+        let actualTime = 0
+        for (let i = 0; i < sortedActivities.length; i++) {
+            const curr = sortedActivities[i]
+            const next = sortedActivities[i + 1] || { activity: 'Fake', date: now }
 
-        if (curr.activity !== STATES.break && curr.activity !== STATES.dayEnd && curr.date < now) {
-            actualTime += next.date - curr.date
+            if (curr.activity !== STATES.break && curr.activity !== STATES.dayEnd && curr.date < now) {
+                actualTime += next.date - curr.date
+            }
+
+            if (next.date > now) break
         }
 
-        if (next.date > now) break
+        let expectedTime = 0
+        const timeSlots = Object.values(TIME_SLOTS)
+        for (let i = 0; i < timeSlots.length; i++) {
+            const { start, end } = timeSlots[i]
+            const startSeconds = getSecondsFromTime(start)
+            const endSeconds = getSecondsFromTime(end)
+            const nowSeconds = getSecondsFromDate(now)
+
+            if (nowSeconds <= startSeconds) continue
+
+            expectedTime += Math.min(endSeconds, nowSeconds) - startSeconds
+        }
+
+        delta = formatTime(actualTime - expectedTime, true)
     }
-
-    let expectedTime = 0
-    const timeSlots = Object.values(TIME_SLOTS)
-    for (let i = 0; i < timeSlots.length; i++) {
-        const { start, end } = timeSlots[i]
-        const startSeconds = getSecondsFromTime(start)
-        const endSeconds = getSecondsFromTime(end)
-        const nowSeconds = getSecondsFromDate(now)
-
-        if (nowSeconds <= startSeconds) continue
-
-        expectedTime += Math.min(endSeconds, nowSeconds) - startSeconds
-    }
-
-    const delta = formatTime(actualTime - expectedTime, true)
     return buildOkResponse({ body, total, delta })
 }
 
