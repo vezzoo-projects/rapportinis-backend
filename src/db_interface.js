@@ -89,7 +89,7 @@ async function calculateTimes(user_id, startTimestamp, now) {
 
     const currentDay = new Date(startTimestamp).getDay()
     let delta = undefined
-    if (currentDay !== 0 && currentDay !== 6) {
+    if ((currentDay !== 0 && currentDay !== 6) && now >= startTimestamp) {
         let actualTime = 0
         for (let i = 0; i < sortedActivities.length; i++) {
             const curr = sortedActivities[i]
