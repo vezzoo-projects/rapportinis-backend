@@ -8,11 +8,14 @@ const TABLES = {
 }
 
 const STATES = {
-    launchBreak: '--%launch-break%--',
+    break: '--%break%--',
     dayEnd: '--%day-end%--',
 }
 
-const TIMES = ['09:00', '13:00', '14:00', '18:00']
+const TIME_SLOTS = {
+    morning: { start: '09:00', end: '13:00' },
+    afternoon: { start: '14:00', end: '18:00' },
+}
 
 async function doLogin(user) {
     if (!user) {
@@ -51,37 +54,25 @@ async function editActivity(body, user_id) {
     }
 }
 
-async function calculateTimes(user_id, startTimestamp) {
-    const activities = await getActivities(user_id, startTimestamp)
-    if (!activities) return buildErrorResponse('Cannot read activities')
+async function calculateTimes(user_id, startTimestamp, now) {
+    if (!now) {
+        return buildErrorResponse('You must valorize the "now" key')
+    }
 
-    let total = 0
-    let delta = 0
-    const body = activities
-        .map((a) => {
-            delete a.activity_id
-            delete a.user_id
-            return a
-        })
+    const rawActivities = await getActivities(user_id, startTimestamp)
+    if (!rawActivities) {
+        return buildErrorResponse('Cannot read activities')
+    }
+
+    const activities = rawActivities
         .map((a, i) => {
-            let time = 0
-
-            if (activities[i + 1]) {
-                const diff = activities[i + 1].date - a.date
-                time = diff
-
-                if (a.activity !== STATES.launchBreak && a.activity !== STATES.dayEnd) {
-                    total += diff
-                }
-            } else {
-                time = null
-            }
-
-            return { activity: a.activity, time: time }
+            const { activity } = a
+            const time = rawActivities[i + 1] ? rawActivities[i + 1].date - a.date : 0
+            return { activity, time }
         })
-        .filter((a) => a.activity !== STATES.dayEnd && a.activity !== STATES.launchBreak)
+        .filter((a) => a.activity !== STATES.dayEnd && a.activity !== STATES.break)
         .reduce((accumulator, currentValue) => {
-            const a = accumulator.find((act) => act.activity === currentValue.activity)
+            const a = accumulator.find((a) => a.activity === currentValue.activity)
 
             if (a) {
                 a.time += currentValue.time
@@ -90,56 +81,45 @@ async function calculateTimes(user_id, startTimestamp) {
                 return accumulator.concat(currentValue)
             }
         }, [])
-        .map((a) => {
-            const hours = normalize(a.time / (60 * 60))
-            const minutes = normalize((a.time % (60 * 60)) / 60)
+    const body = activities.map((a) => ({ ...a, time: formatTime(a.time) }))
+    const totalSeconds = activities.reduce((t, a) => (t += a.time), 0)
+    const total = formatTime(totalSeconds)
+    const sortedActivities = rawActivities.sort((a, b) => a.date - b.date)
 
-            return { ...a, time: `${hours}:${minutes}` }
-        })
-    const deltaSeconds = activities
-        .sort((a, b) => a.date - b.date)
-        .filter(
-            (a, i) =>
-                i === 0 || // inizio giornata
-                a.activity === STATES.launchBreak || // inizio pausa pranzo
-                activities[i - 1].activity === STATES.launchBreak || // prima attività del pome
-                a.activity === STATES.dayEnd, // fine giornata
-        )
-        .map((a, i) => {
-            const date = new Date(a.date * 1000)
-            const referenceHours = Number(TIMES[i].split(':')[0])
-            const referenceMinutes = Number(TIMES[i].split(':')[1])
-            const referenceDate = new Date()
-            referenceDate.setFullYear(date.getFullYear())
-            referenceDate.setMonth(date.getMonth())
-            referenceDate.setDate(date.getDate())
-            referenceDate.setHours(referenceHours)
-            referenceDate.setMinutes(referenceMinutes)
-            referenceDate.setSeconds(0)
-            referenceDate.setMilliseconds(0)
+    let actualTime = 0
+    for (let i = 0; i < sortedActivities.length; i++) {
+        const curr = sortedActivities[i]
+        const next = sortedActivities[i + 1] || { activity: 'Fake', date: now }
 
-            const dSeconds = (referenceDate.getTime() - date.getTime()) / 1000
-            return i % 2 === 0 ? dSeconds : -dSeconds
-        })
-        .reduce((accumulator, currentValue) => (accumulator += currentValue), 0)
+        if (curr.activity !== STATES.break && curr.activity !== STATES.dayEnd && curr.date < now) {
+            actualTime += next.date - curr.date
+        }
 
-    const totalHours = normalize(total / (60 * 60))
-    const totalMinutes = normalize((total % (60 * 60)) / 60)
-    total = `${totalHours}:${totalMinutes}`
+        if (next.date > now) break
+    }
 
-    const sign = deltaSeconds < 0 ? `-` : `+`
-    const deltaHours = normalize(Math.abs(deltaSeconds / (60 * 60)))
-    const deltaMinutes = normalize(Math.abs((deltaSeconds % (60 * 60)) / 60))
-    delta = `${sign}${deltaHours}:${deltaMinutes}`
+    let expectedTime = 0
+    const timeSlots = Object.values(TIME_SLOTS)
+    for (let i = 0; i < timeSlots.length; i++) {
+        const { start, end } = timeSlots[i]
+        const startSeconds = getSecondsFromTime(start)
+        const endSeconds = getSecondsFromTime(end)
+        const nowSeconds = getSecondsFromDate(now)
 
+        if (nowSeconds <= startSeconds) continue
+
+        expectedTime += Math.min(endSeconds, nowSeconds) - startSeconds
+    }
+
+    const delta = formatTime(actualTime - expectedTime, true)
     return buildOkResponse({ body, total, delta })
 }
 
 async function getRawActivities(user_id, startTimestamp) {
-    const activities = await getActivities(user_id, startTimestamp)
-    if (!activities) return buildErrorResponse('Cannot read activities')
+    const rawActivities = await getActivities(user_id, startTimestamp)
+    if (!rawActivities) return buildErrorResponse('Cannot read activities')
 
-    const body = activities
+    const body = rawActivities
         .map((a) => {
             delete a.user_id
             return a
@@ -209,6 +189,33 @@ async function addToTable(table, object) {
 
 async function editTable(table, object, where) {
     return await get(table).update(object, { where: where })
+}
+
+function formatTime(time, withSign = false) {
+    const hours = normalize(Math.abs(time / (60 * 60)))
+    const minutes = normalize(Math.abs((time % (60 * 60)) / 60))
+
+    if (withSign) {
+        const sign = time < 0 ? `-` : `+`
+        return `${sign}${hours}:${minutes}`
+    } else {
+        return `${hours}:${minutes}`
+    }
+}
+
+function getSecondsFromTime(time) {
+    const [hours, minutes] = time.split(':')
+    return Number(hours) * 60 * 60 + Number(minutes) * 60
+}
+
+function getTimeFromDate(timestamp) {
+    const date = new Date(Number(timestamp) * 1000)
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function getSecondsFromDate(timestamp) {
+    const time = getTimeFromDate(timestamp)
+    return getSecondsFromTime(time)
 }
 
 module.exports = {

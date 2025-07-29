@@ -43,7 +43,7 @@ connect().then(async () => {
         })
 
         server.post('/getComputedActivities', async (req, res) => {
-            const result = await calculateTimes(req.headers.user, req.body.startTimestamp)
+            const result = await calculateTimes(req.headers.user, req.body.startTimestamp, req.body.now)
             log('POST', '/getComputedActivities', result.status, result.body)
 
             res.status(result.status)
